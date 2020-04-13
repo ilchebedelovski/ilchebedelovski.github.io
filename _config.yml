@@ -13,7 +13,7 @@ theme_settings:
 
   # Header and footer text
   header_text: >
-     <p>An experienced DevOps Engineer / Site Reliability / Gloud Architect </p>
+     <p>An experienced DevOps / Site Reliability / Gloud Architect </p>
   header_text_feature_image:
   footer_text: >
    Powered by <a href="https://jekyllrb.com/">Jekyll</a> with <a href="https://github.com/ilchebedelovski/ilchebedelovski.github.io">Type Theme</a>

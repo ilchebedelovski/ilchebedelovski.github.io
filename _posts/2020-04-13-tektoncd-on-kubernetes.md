@@ -33,3 +33,203 @@ A `pipeline` is a collection of tasks in order. Tekton collects all the tasks, c
 
 ## Requirements
 
+- A running Kubernetes cluster is required where Tekton will be installed.
+- Container Registry where you'll push your Docker image.
+
+## Installing Tekton on Kubernetes
+
+Installing Tekton on Kubernetes means that we will deploy the required resources on the cluster that will allow us to execute pipelines inside that cluster.
+
+Using the `kubectl` client I will create a Kubernetes Secret from my Registry's credentials (I am using Docker Hub as Container Registry):
+```
+$ kubectl -n tekton-pipelines create secret docker-registry docker-hub --docker-server=$REGISTRY_HOST --docker-username=$REGISTRY_USERNAME --docker-password=$REGISTRY_PASSWORD --docker-email=$REGISTRY_EMAIL
+```
+
+Creating ServiceAccount for our Tekton Pipelines:
+```
+$ kubectl -n tekton-pipelines create serviceaccount tekton-pipelines
+```
+
+Creating ClusterRole and ClusterRoleBinding with specific roles for the previously created ServiceAccount:
+```
+$ kubectl create clusterrole tekton-pipelines-role --verb=get,list,watch,create,update,patch,delete --resource=deployments,deployments.apps,services,services,pods,secrets,ingress,pvc
+$ kubectl create clusterrolebinding tekton-pipelines-binding --clusterrole=tekton-pipelines-role --serviceaccount=tekton-pipelines:tekton-pipelines
+```
+
+We just satisfied all dependencies before installing Tekton on our Kubernetes cluster, now we can install the latest Tekton release:
+```
+$ kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
+```
+
+## Creating a sample Pipeline
+
+In this example I will present how you can create simple pipeline for Python Flask application. In my workflow I have:
+
+- `PipelineResource`
+- `Task`
+- `Pipeline`
+- `PipelineRun`
+
+### PipelineResource
+
+There are 2 resources:
+- `git-repo` the repository from where you will clone the application.
+- `image-registry` the Container Registry destination where the Docker Image will be pushed.
+
+```
+apiVersion: tekton.dev/v1alpha1
+kind: PipelineResource
+metadata:
+  name: git-repo
+  namespace: tekton-pipelines
+spec:
+  type: git
+  params:
+    - name: revision
+      value: master
+    - name: url
+      value: ''
+---
+apiVersion: tekton.dev/v1alpha1
+kind: PipelineResource
+metadata:
+  name: image-registry
+  namespace: tekton-pipelines
+spec:
+  type: image
+  params:
+    - name: url
+      value: ''
+```
+
+### Task
+
+There is only one task named as `build-and-deploy`, inside that task there few steps:
+
+- `build-and-push` - where the image is built and pushed to our Container Registry. I am using [Kaniko](https://github.com/GoogleContainerTools/kaniko) for building and pushing the image.
+- `run-helm-add` - our Helm Chart is public available, we add that repo to our local Helm setting.
+- `run-helm-update` - a step for updating the local config with the resently added repository.
+- `run-helm-upgrade` - a step for installing/upgrading the Helm Chart.
+
+```
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: build-and-deploy
+  namespace: tekton-pipelines
+spec:
+  inputs:
+    resources:
+      - name: git-repo
+        type: git
+    params:
+      - name: pathToDockerFile
+        type: string
+      - name: pathToContext
+        type: string
+      - name: appChartRepo
+        type: string
+      - name: appName
+        type: string
+      - name: imageRepository
+        type: string
+      - name: ingressHost
+        type: string
+      - name: pvcName
+        type: string
+      - name: pvcResourcesStorage
+        type: string
+      - name: pvcStorageClassName
+        type: string
+      - name: backendAppEnv
+        type: string
+      - name: backendConsumerKey
+        type: string
+      - name: backendConsumerSecret
+        type: string
+      - name: backendAccessToken
+        type: string
+      - name: backendAccessTokenSecret
+        type: string
+      - name: backendAuthToken
+        type: string
+  outputs:
+    resources:
+      - name: image-registry
+        type: image
+  steps:
+    - name: build-and-push
+      image: gcr.io/kaniko-project/executor:v0.18.0
+      securityContext:
+        runAsUser: 0
+      env:
+        - name: DOCKER_CONFIG
+          value: /data/.docker/
+      command:
+        - /kaniko/executor
+      args:
+        - --dockerfile=$(inputs.params.pathToDockerFile)
+        - --destination=$(inputs.params.imageRepository)
+        - --context=$(inputs.params.pathToContext)
+        - --skip-tls-verify
+        - --verbosity=debug
+      volumeMounts:
+        - name: kaniko-secret
+          mountPath: /data
+    - name: run-helm-add
+      image: alpine/helm:3.1.1
+      command: ["helm"]
+      args:
+        - repo
+        - add
+        - $(inputs.params.appName)
+        - $(inputs.params.appChartRepo)
+    - name: run-helm-update
+      image: alpine/helm:3.1.1
+      command: ["helm"]
+      args:
+        - repo
+        - update
+    - name: run-helm-upgrade
+      image: alpine/helm:3.1.0
+      command: ["helm"]
+      args:
+        - upgrade
+        - --install
+        - --namespace=$(inputs.params.appName)
+        - $(inputs.params.appName)
+        - api/api
+        - --set
+        - namespace=$(inputs.params.appName)
+        - --set
+        - name=$(inputs.params.appName)
+        - --set
+        - image.repository=$(inputs.params.imageRepository)
+        - --set
+        - ingress.hosts[0]=$(inputs.params.ingressHost)
+        - --set
+        - pvc.name=$(inputs.params.pvcName)
+        - --set
+        - pvc.resources.storage=$(inputs.params.pvcResourcesStorage)
+        - --set
+        - pvc.storageClassName=$(inputs.params.pvcStorageClassName)
+        - --set
+        - backend.appEnv=$(inputs.params.backendAppEnv)
+        - --set
+        - backend.consumerKey=$(inputs.params.backendConsumerKey)
+        - --set
+        - backend.consumerSecret=$(inputs.params.backendConsumerSecret)
+        - --set
+        - backend.accessToken=$(inputs.params.backendAccessToken)
+        - --set
+        - backend.accessTokenSecret=$(inputs.params.backendAccessTokenSecret)
+        - --set
+        - backend.authToken=$(inputs.params.backendAuthToken)
+  volumes:
+    - name: kaniko-secret
+      secret:
+        secretName: docker-hub
+        items:
+          - key: .dockerconfigjson
+            path: .docker/config.json
+```

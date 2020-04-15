@@ -3,8 +3,6 @@ layout: post
 title: Tekton CI/CD on Kubernetes
 ---
 
-## Introduction
-
 The Tekton Pipelines project provides k8s-style resources for declaring CI/CD-style pipelines, it is an open-source, standalone project that provides an additional layer of abstraction by introducing the pipeline mentality in Kubernetes. Tekton Pipelines are Cloud Native:
 
 - Run on Kubernetes
@@ -104,12 +102,12 @@ spec:
 
 ### Task
 
-There is only one task named as `build-and-deploy`, inside that task there few steps:
+There is only one task named as `build-and-deploy`, in the main section we have `inputs`, `outputs` and `steps`. Inside that task there few steps:
 
 - `build-and-push` - where the image is built and pushed to our Container Registry. I am using [Kaniko](https://github.com/GoogleContainerTools/kaniko) for building and pushing the image.
 - `run-helm-add` - our Helm Chart is public available, we add that repo to our local Helm setting.
 - `run-helm-update` - a step for updating the local config with the resently added repository.
-- `run-helm-upgrade` - a step for installing/upgrading the Helm Chart.
+- `run-helm-upgrade` - a step for installing/upgrading the Helm Chart, in this step as you can see, several Helm Values are replaced, it is the application requirement for suppling the required variables to the Helm Chart and pass them to the scheduled Kubernetes Pod.
 
 ```
 apiVersion: tekton.dev/v1alpha1
@@ -131,28 +129,9 @@ spec:
         type: string
       - name: appName
         type: string
-      - name: imageRepository
-        type: string
-      - name: ingressHost
-        type: string
-      - name: pvcName
-        type: string
-      - name: pvcResourcesStorage
-        type: string
-      - name: pvcStorageClassName
-        type: string
-      - name: backendAppEnv
-        type: string
-      - name: backendConsumerKey
-        type: string
-      - name: backendConsumerSecret
-        type: string
-      - name: backendAccessToken
-        type: string
-      - name: backendAccessTokenSecret
-        type: string
-      - name: backendAuthToken
-        type: string
+        .
+        .
+        .
   outputs:
     resources:
       - name: image-registry
@@ -205,26 +184,9 @@ spec:
         - name=$(inputs.params.appName)
         - --set
         - image.repository=$(inputs.params.imageRepository)
-        - --set
-        - ingress.hosts[0]=$(inputs.params.ingressHost)
-        - --set
-        - pvc.name=$(inputs.params.pvcName)
-        - --set
-        - pvc.resources.storage=$(inputs.params.pvcResourcesStorage)
-        - --set
-        - pvc.storageClassName=$(inputs.params.pvcStorageClassName)
-        - --set
-        - backend.appEnv=$(inputs.params.backendAppEnv)
-        - --set
-        - backend.consumerKey=$(inputs.params.backendConsumerKey)
-        - --set
-        - backend.consumerSecret=$(inputs.params.backendConsumerSecret)
-        - --set
-        - backend.accessToken=$(inputs.params.backendAccessToken)
-        - --set
-        - backend.accessTokenSecret=$(inputs.params.backendAccessTokenSecret)
-        - --set
-        - backend.authToken=$(inputs.params.backendAuthToken)
+        .
+        .
+        .
   volumes:
     - name: kaniko-secret
       secret:
@@ -233,3 +195,94 @@ spec:
           - key: .dockerconfigjson
             path: .docker/config.json
 ```
+
+### Pipeline
+
+As I mentioned earlier, a `pipeline` is a collection of tasks in order, in my `pipeline` I have `resources`, `params` and `tasks`. The vital in this `pipeline` is the moment of calling my previous task named as `build-and-deploy` with the already defined resources.
+
+```
+kind: Pipeline
+metadata:
+  name: api-pipeline
+  namespace: tekton-pipelines
+spec:
+  resources:
+    - name: git-repo
+      type: git
+    - name: image-registry
+      type: image
+  params:
+    - name: pathToDockerFile
+      type: string
+    - name: pathToContext
+      type: string
+    - name: appChartRepo
+      type: string
+    - name: appName
+      type: string
+      .
+      .
+      .
+  tasks:
+    - name: build-and-deploy
+      taskRef:
+        name: build-and-deploy
+      params:
+        - name: pathToDockerFile
+          value: "$(params.pathToDockerFile)"
+        - name: pathToContext
+          value: "$(params.pathToContext)"
+        - name: appChartRepo
+          value: "$(params.appChartRepo)"
+        - name: appName
+          value: "$(params.appName)"
+          .
+          .
+          .
+      resources:
+        inputs:
+          - name: git-repo
+            resource: git-repo
+        outputs:
+          - name: image-registry
+            resource: image-registry
+```
+
+### PipelineRun
+
+This deployment is crucial for running the previus pipeline, I am referencing the `pipeline` name where I am sending the resources and the values of the required parameters.
+
+```
+apiVersion: tekton.dev/v1alpha1
+kind: PipelineRun
+metadata:
+  name: api-pipeline-run
+  namespace: tekton-pipelines
+spec:
+  serviceAccountName: tekton-pipelines
+  pipelineRef:
+    name: api-pipeline
+  resources:
+    - name: git-repo
+      resourceRef:
+        name: git-repo
+    - name: image-registry
+      resourceRef:
+        name: image-registry
+  params:
+    - name: "appName"
+      value: ""
+    - name: imageRepository
+      .
+      .
+      .
+```
+
+## Conclusion
+
+Tekton is perfect CD solution, it provides open-source components for standardizing your CI/CD tooling and processes across different vendors, programming languages, and deployment environments. Industry specifications around pipelines, releases, workflows, and other CI/CD components available with Tekton will work well with existing CI/CD tools such as Jenkins, Jenkins X, Skaffold, and Knative, among others. Tekton provides a number of interactive tutorials at [try](https://try.tekton.dev) for developers to get hands-on experience with the project.
+
+## References
+
+- Tekton git repository, https://github.com/tektoncd/pipeline
+- Official Tekton documentation, http://tekton.dev/docs

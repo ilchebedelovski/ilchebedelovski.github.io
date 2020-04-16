@@ -9,9 +9,9 @@ The Tekton Pipelines project provides k8s-style resources for declaring CI/CD-st
 - Have Kubernetes clusters as a first class type
 - Use containers as their building blocks
 
-In this article you I am going to present you how you can set up your first pipeline in Tekton, if you need more specific info about Tekton you can find it [here](https://tekton.dev/).
+In this article I am going to present to you how you can set up your first pipeline in Tekton, if you need more specific info about Tekton you can find it [here](https://tekton.dev/).
 
-### Bsic Tekon resources
+### Basic Tekton resources
 
 The Tekton Pipeline project extends the Kubernetes API by five additional custom resource definitions (CRDs):
 
@@ -27,7 +27,7 @@ A `step` is an operation in a CI/CD workflow, such as running some unit tests fo
 
 A `task` is a collection of steps in order. Tekton runs a task in the form of a Kubernetes pod, where each step becomes a running container in the pod. This design allows you to set up a shared environment for a number of related steps; for example, you may mount a Kubernetes volume in a task, which will be accessible inside each step of the task.
 
-A `pipeline` is a collection of tasks in order. Tekton collects all the tasks, connects them in a directed acyclic graph (DAG), and executes the graph in sequence. In other words, it creates a number of Kubernetes pods and ensures that each pods complete running successfully as desired. Tekton grants developers full control of the process: one may set up a fan-in/fan-out scenario of task completion, ask Tekton to retry automatically should a flaky test exists, or specify a condition that a task must meet before proceeding.
+A `pipeline` is a collection of tasks in order. Tekton collects all the tasks, connects them in a directed acyclic graph (DAG), and executes the graph in sequence. In other words, it creates a number of Kubernetes pods and ensures that each pod complete running successfully as desired. Tekton grants developers full control of the process: one may set up a fan-in/fan-out scenario of task completion, ask Tekton to retry automatically should a flaky test exists, or specify a condition that a task must meet before proceeding.
 
 ## Requirements
 
@@ -36,7 +36,7 @@ A `pipeline` is a collection of tasks in order. Tekton collects all the tasks, c
 
 ## Installing Tekton on Kubernetes
 
-Installing Tekton on Kubernetes means that we will deploy the required resources on the cluster that will allow us to execute pipelines inside that cluster.
+Installing Tekton on Kubernetes means that I will deploy the required resources on the cluster that will allow me to execute pipelines inside that cluster.
 
 Using the `kubectl` client I will create a Kubernetes Secret from my Registry's credentials (I am using Docker Hub as Container Registry):
 ```
@@ -71,6 +71,7 @@ In this example I will present how you can create simple pipeline for Python Fla
 ### PipelineResource
 
 There are 2 resources:
+
 - `git-repo` the repository from where you will clone the application.
 - `image-registry` the Container Registry destination where the Docker Image will be pushed.
 
@@ -102,12 +103,12 @@ spec:
 
 ### Task
 
-There is only one task named as `build-and-deploy`, in the main section we have `inputs`, `outputs` and `steps`. Inside that task there few steps:
+There is only one task named as `build-and-deploy`, in the main section I have `inputs`, `outputs` and `steps`. Inside that task there are few steps:
 
-- `build-and-push` - where the image is built and pushed to our Container Registry. I am using [Kaniko](https://github.com/GoogleContainerTools/kaniko) for building and pushing the image.
-- `run-helm-add` - our Helm Chart is public available, we add that repo to our local Helm setting.
-- `run-helm-update` - a step for updating the local config with the resently added repository.
-- `run-helm-upgrade` - a step for installing/upgrading the Helm Chart, in this step as you can see, several Helm Values are replaced, it is the application requirement for suppling the required variables to the Helm Chart and pass them to the scheduled Kubernetes Pod.
+- `build-and-push` - where the image is built and pushed to my Container Registry. I am using [Kaniko](https://github.com/GoogleContainerTools/kaniko) for building and pushing the image.
+- `run-helm-add` - my Helm Chart is publicly available, I am adding that repo to my local Helm setting.
+- `run-helm-update` - a step for updating the local config with the recently added repository.
+- `run-helm-upgrade` - a step for installing/upgrading the Helm Chart, in this step as you can see, several Helm Values are replaced, it is the application requirement for supplying the required variables to the Helm Chart and pass them to the scheduled Kubernetes Pod.
 
 ```
 apiVersion: tekton.dev/v1alpha1
@@ -250,7 +251,7 @@ spec:
 
 ### PipelineRun
 
-This deployment is crucial for running the previus pipeline, I am referencing the `pipeline` name where I am sending the resources and the values of the required parameters.
+This deployment is crucial for running the previous pipeline, I am referencing the `pipeline` name where I am sending the resources and the values of the required parameters.
 
 ```
 apiVersion: tekton.dev/v1alpha1
@@ -280,7 +281,7 @@ spec:
 
 ## Conclusion
 
-Tekton is perfect CD solution, it provides open-source components for standardizing your CI/CD tooling and processes across different vendors, programming languages, and deployment environments. Industry specifications around pipelines, releases, workflows, and other CI/CD components available with Tekton will work well with existing CI/CD tools such as Jenkins, Jenkins X, Skaffold, and Knative, among others. Tekton provides a number of interactive tutorials at [try](https://try.tekton.dev) for developers to get hands-on experience with the project.
+Tekton is a perfect CD solution, it provides open-source components for standardizing your CI/CD tooling and processes across different vendors, programming languages, and deployment environments. Industry specifications around pipelines, releases, workflows, and other CI/CD components available with Tekton will work well with existing CI/CD tools such as Jenkins, Jenkins X, Skaffold, and Knative, among others. Tekton provides a number of interactive tutorials at [try](https://try.tekton.dev) for developers to get hands-on experience with the project.
 
 ## References
 
